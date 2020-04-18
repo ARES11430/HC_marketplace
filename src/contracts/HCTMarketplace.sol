@@ -136,6 +136,8 @@ contract HCTMarketplace is OwnerShip {
         return bids[postID].length;
     }
     
+    // Return the number of successful sellings w/o dispute for spesific seller
+    // It is used to measure seller's reputation
     function getSellerReputation(address seller) public view returns (uint) {
         return sell[seller].length;
     }
