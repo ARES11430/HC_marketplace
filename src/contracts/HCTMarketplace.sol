@@ -148,7 +148,7 @@ contract HCTMarketplace is OwnerShip {
     
     // Return the number of successful sellings w/o dispute for spesific seller
     // It is used to measure seller's reputation
-    function getSellerWonWithoutDispute(address seller) public view returns (uint) {
+    function getSuccessfulSoldsWithoutDispute(address seller) public view returns (uint) {
         return soldWithoutDispute[seller].length;
     }
     // Return the number of disputes that seller won...
