@@ -76,7 +76,8 @@ contract HCTMarketplace is OwnerShip {
     constructor() public payable{
        
         owner = msg.sender;
-        tokenAddress = ERC20(0x4195fFcBc3d07E667175a044637cCC6CB4efB963);        // HCT Token contract
+        // HCT Token contract, replace it if you deploy the token localy
+        tokenAddress = ERC20(0x4195fFcBc3d07E667175a044637cCC6CB4efB963);          
         allowedAffiliates[address(0)] = true;        // allow null affiliate by default
     }
 
@@ -104,11 +105,8 @@ contract HCTMarketplace is OwnerShip {
         isPostActive: true, escrowAgent: _escrowAgent}));
     
         if (_escrow > 0) {
-           
-                tokenAddress.approve(_seller,_escrow);
-                tokenAddress.allowance(_seller,address(this));
-                tokenAddress.transferFrom(_seller, address(this), _escrow);        // Transfer HCT Token
-            
+             //   tokenAddress.allowance(_seller,address(this));
+             //  tokenAddress.transferFrom(_seller, address(this), _escrow);        // Transfer HCT Token 
         }
         emit PosterCreated(_seller, posts.length - 1, _ipfsHash);
     }
