@@ -1,7 +1,7 @@
-pragma solidity >= 0.4.0 < 0.6.4;
+pragma solidity >= 0.5.0;
 
-import "hct/ownerShip/OwnerShip.sol";
-import "hct/token/ERC20.sol";
+import "./OwnerShip.sol";
+import "./ERC20.sol";
 
 
 
@@ -53,13 +53,23 @@ contract HCTMarketplace is OwnerShip {
         bool isDisputed;          // status
         bool isFinilised;         // status
     }
-    
-    struct SellerReputation{
+    // Reputation Variables
+    struct SoldWithoutDispute{
+        address seller;      // address seller
+    }
+    // Reputation Variables
+    struct SellerWonDispute{
+        address seller;      // address seller
+    }
+    // Reputation Variables
+    struct BuyerWonDispute{
         address seller;      // address seller
     }
     
     Poster[] public posts;
-    mapping(address => SellerReputation[]) sell;  // sold post => reputation
+    mapping(address => SoldWithoutDispute[]) soldWithoutDispute;  // seller => soldWithoutDispute
+    mapping(address => SellerWonDispute[]) sellerWonDispute;  // seller => sellerWonDispute
+    mapping(address => BuyerWonDispute[]) buyerWonDispute;  // seller => buyerWonDispute
     mapping(uint => Bid[])  bids; // PosterID => Bids
     mapping(address => bool)  allowedAffiliates;
     
@@ -94,8 +104,10 @@ contract HCTMarketplace is OwnerShip {
         isPostActive: true, escrowAgent: _escrowAgent}));
     
         if (_escrow > 0) {
-               // tokenAddress.allowance(_seller,address(this));
-               // tokenAddress.transferFrom(_seller, address(this), _escrow);        // Transfer HCT Token
+           
+                tokenAddress.approve(_seller,_escrow);
+                tokenAddress.allowance(_seller,address(this));
+                tokenAddress.transferFrom(_seller, address(this), _escrow);        // Transfer HCT Token
             
         }
         emit PosterCreated(_seller, posts.length - 1, _ipfsHash);
@@ -138,8 +150,17 @@ contract HCTMarketplace is OwnerShip {
     
     // Return the number of successful sellings w/o dispute for spesific seller
     // It is used to measure seller's reputation
-    function getSellerReputation(address seller) public view returns (uint) {
-        return sell[seller].length;
+    function getSellerWonWithoutDispute(address seller) public view returns (uint) {
+        return soldWithoutDispute[seller].length;
+    }
+    // Return the number of disputes that seller won...
+    function getSellerWonDispute(address seller) public view returns(uint){
+        return sellerWonDispute[seller].length;
+    }
+    // Return the number of disputes that seller lost and buyer won...
+    // This number would be a negative point for seller 
+    function getSellerLostDispute(address seller) public view returns(uint){
+        return buyerWonDispute[seller].length;
     }
     
     // Poster escrowAgent withdraws post. IPFS hash contains reason for withdrawl.
@@ -226,7 +247,7 @@ contract HCTMarketplace is OwnerShip {
         Poster storage post = posts[postID];
         Bid storage bid = bids[postID][bidID];
         require(msg.sender == bid.buyer || msg.sender == post.seller, "You need to be a buyer or seller ");
-        require(post.isPostActive== true, "this post had violated our policy");
+        require(post.isPostActive == true, "this post had violated our policy");
         require(bid.isFinilised == false, "this bid is Already finalized");
         require(bid.isActive == true, "this bid is no longer available");
         
@@ -238,7 +259,7 @@ contract HCTMarketplace is OwnerShip {
             bid.isSellerApproved = true;
         }
         if (bid.isBuyerApproved == true && bid.isSellerApproved == true) {
-            sell[post.seller].push(SellerReputation({seller: post.seller}));
+            soldWithoutDispute[post.seller].push(SoldWithoutDispute({seller: post.seller}));
             bid.isFinilised = true;
             uint new_escrow = post.escrow - bid.commission; // Accepting an offer puts hct Token into escrow
             _payCommission(bid.affiliate, bid.commission);
@@ -254,9 +275,14 @@ contract HCTMarketplace is OwnerShip {
         Poster storage post = posts[postID];
         Bid storage bid = bids[postID][bidID];
         require( msg.sender == bid.buyer || msg.sender == post.seller, "Must be seller or buyer");
-    /*    require(bid.isSellerApproved == false && bid.isBuyerApproved == false ||
+        if (msg.sender == bid.buyer && bid.isBuyerApproved == true){
+            revert(); 
+            // after buyer approves the finalized bid , they cant call dispute anymore... for sake of seller reputation
+        }
+        require(
         bid.isSellerApproved == true && bid.isBuyerApproved == false ||
-        bid.isSellerApproved == false && bid.isBuyerApproved == true , "Bid is finalized"); */
+        bid.isSellerApproved == false && bid.isBuyerApproved == true , 
+        "can't call dispute now because The bid is not accepted yet...Use the remove bid function");
         require(post.isPostActive== true, "this post had violated our policy");
         require(bid.isFinilised == false, "this bid is Already finalized");
         require(bid.isActive == true, "this bid is no longer available");
@@ -273,24 +299,28 @@ contract HCTMarketplace is OwnerShip {
     ) public {
         Poster storage post = posts[postID];
         Bid memory bid = bids[postID][bidID];
-        require(msg.sender == bid.arbitrator, "Must be arbitrator to call vote");
         require(bid.isDisputed == true, "status != disputed");
-        
+        require(msg.sender == bid.arbitrator, "Must be arbitrator to call vote");
+
         uint seller_value = post.escrow + bid.amount;               // the escrow and bid amount
     
         if (_rule == 0){
             _paySeller(post.seller, seller_value, bid.currency);
+            sellerWonDispute[post.seller].push(SellerWonDispute({seller: post.seller}));
         } else if (_rule == 1){
             _refundBuyer(bid.buyer, bid.currency, bid.amount);
+            buyerWonDispute[post.seller].push(BuyerWonDispute({seller: post.seller}));
         } else if (_rule == 2){
             require(post.escrow >= bid.commission, "amount of escrow must be than higher commission");
             _payCommission(bid.affiliate, bid.commission);
             uint refund_seller = seller_value - bid.commission;
             _paySeller(post.seller, refund_seller, bid.currency);
+            sellerWonDispute[post.seller].push(SellerWonDispute({seller: post.seller}));
         } else if (_rule == 3){
             require(post.escrow >= bid.commission, "amount of escrow must be than higher commission");
             _payCommission(bid.affiliate, bid.commission);
             _refundBuyer(bid.buyer, bid.currency, bid.amount);
+            buyerWonDispute[post.seller].push(BuyerWonDispute({seller: post.seller}));
         }
         bid.isFinilised = true;
         bid.isActive = false;
