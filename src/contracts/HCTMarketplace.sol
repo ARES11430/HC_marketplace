@@ -1,7 +1,7 @@
-pragma solidity >= 0.5.0;
+pragma solidity >= 0.4.0 < 0.6.4;
 
-import "./OwnerShip.sol";
-import "./ERC20.sol";
+import "hct/ownerShip/OwnerShip.sol";
+import "hct/token/ERC20.sol";
 
 
 
@@ -23,7 +23,8 @@ contract HCTMarketplace is OwnerShip {
     event BidData            (address indexed party, uint indexed postID, uint indexed bidID, bytes32 ipfsHash);
     event PostData           (address indexed party, uint indexed postID, bytes32 ipfsHash);
     event BidDisputed        (address indexed party, uint indexed postID, uint indexed bidID, bytes32 ipfsHash);
-
+    
+    
     // Variables
     enum ObjectType {Painting, Carpet, Clay, Glass, Metal, Others}        // type of objects posted on market
     ERC20 public tokenAddress;    // HCT Token address
@@ -53,14 +54,19 @@ contract HCTMarketplace is OwnerShip {
         bool isFinilised;         // status
     }
     
+    struct SellerReputation{
+        address seller;      // address seller
+    }
+    
     Poster[] public posts;
+    mapping(address => SellerReputation[]) sell;  // sold post => reputation
     mapping(uint => Bid[])  bids; // PosterID => Bids
     mapping(address => bool)  allowedAffiliates;
     
     constructor() public payable{
        
         owner = msg.sender;
-        tokenAddress = ERC20(0x692a70D2e424a56D2C6C27aA97D1a86395877b3A);        // HCT Token contract
+        tokenAddress = ERC20(0x4195fFcBc3d07E667175a044637cCC6CB4efB963);        // HCT Token contract
         allowedAffiliates[address(0)] = true;        // allow null affiliate by default
     }
 
@@ -88,15 +94,12 @@ contract HCTMarketplace is OwnerShip {
         isPostActive: true, escrowAgent: _escrowAgent}));
     
         if (_escrow > 0) {
-            /* require(
-                tokenAddress.approve(_seller,_escrow) &&
-                tokenAddress.transferFrom(_seller, address(this), _escrow),        // Transfer HCT Token
-                "transferFrom failed"
-            ); */
+               // tokenAddress.allowance(_seller,address(this));
+               // tokenAddress.transferFrom(_seller, address(this), _escrow);        // Transfer HCT Token
+            
         }
         emit PosterCreated(_seller, posts.length - 1, _ipfsHash);
     }
-
     function getPost(uint index) public view returns(address, ObjectType, string memory ,address ,address, bool, uint){
         return (posts[index].seller, posts[index].objectType, posts[index].ipfsHash, posts[index].escrowAgent,
         posts[index].auditor, posts[index].isPostActive, posts[index].escrow);
@@ -131,6 +134,10 @@ contract HCTMarketplace is OwnerShip {
     // Return the total number of bids
     function totalBids(uint postID) public view returns (uint) {
         return bids[postID].length;
+    }
+    
+    function getSellerReputation(address seller) public view returns (uint) {
+        return sell[seller].length;
     }
     
     // Poster escrowAgent withdraws post. IPFS hash contains reason for withdrawl.
@@ -174,6 +181,7 @@ contract HCTMarketplace is OwnerShip {
             require(_commission == 0, "no affiliate, no commission");
         }
         Poster storage post = posts[postID];
+        require(msg.sender != post.seller,"You can't bid on your own post");
         require(post.isPostActive == true, "this post is no longer active due to voilation of service");
 
         bids[postID].push(
@@ -228,6 +236,7 @@ contract HCTMarketplace is OwnerShip {
             bid.isSellerApproved = true;
         }
         if (bid.isBuyerApproved == true && bid.isSellerApproved == true) {
+            sell[post.seller].push(SellerReputation({seller: post.seller}));
             bid.isFinilised = true;
             uint new_escrow = post.escrow - bid.commission; // Accepting an offer puts hct Token into escrow
             _payCommission(bid.affiliate, bid.commission);
