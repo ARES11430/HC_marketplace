@@ -122,7 +122,7 @@ contract SimpleHCTMarket is Reputation, OwnerShip {
             soldWithoutDispute[post.seller].push(SoldWithoutDispute({seller: post.seller}));  // Reputation
             
             order.currency.transfer(post.seller, post.price - order.commission);     // pay seller
-            order.currency.transfer(order.affiliate, order.commission);              // pay handiCraftExpert
+            order.currency.transfer(order.affiliate, order.commission);              // pay affiliate
             order.currency.transfer(order.buyer, 10);                                // pay back extra tokens         
         } 
     }
@@ -159,7 +159,7 @@ contract SimpleHCTMarket is Reputation, OwnerShip {
         
         if (_rule == 1){
             order.currency.transfer(post.seller, post.price - order.commission + 10);     // pay seller
-            order.currency.transfer(order.affiliate, order.commission);              // pay handiCraftExpert
+            order.currency.transfer(order.affiliate, order.commission);              // pay affiliate
             sellerWonDispute[post.seller].push(SellerWonDispute({seller: post.seller}));
         } else if (_rule == 2){
             order.currency.transfer(order.buyer, post.price + 10);  // pay back all tokens
