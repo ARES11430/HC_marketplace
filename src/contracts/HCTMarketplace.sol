@@ -2,29 +2,11 @@ pragma solidity >= 0.5.0;
 
 import "./OwnerShip.sol";
 import "./ERC20.sol";
+import "./Reputation.sol";
 
 
-
-contract HCTMarketplace is OwnerShip {
+contract HCTMarketplace is Reputation, OwnerShip {
   
-  
-    // Events
-    event PosterCreated      (address indexed party, uint indexed postID, string ipfsHash);
-    event PostUpdated        (address indexed party, uint indexed postID, bytes32 ipfsHash);
-    event BidCreated         (address indexed party, uint indexed postID, uint indexed bidID, bytes32 ipfsHash);
-    event RuleExecuted       (address indexed party, uint indexed postID, uint indexed bidID, bytes32 ipfsHash);
-    event BidFinalized       (address indexed party, uint indexed postID, uint indexed bidID, bytes32 ipfsHash);
-    event PostWithdrawn      (address indexed party, uint indexed postID, bytes32 ipfsHash);
-    event PostDisabled       (address indexed party, uint indexed postID, bytes32 ipfsHash);
-    event BidRevoked         (address indexed party, uint indexed postID, uint indexed bidID, bytes32 ipfsHash);
-    event AffiliateAdded     (address indexed party, bytes32 ipfsHash);
-    event AffiliateRemoved   (address indexed party, bytes32 ipfsHash);
-    event MarketplaceData    (address indexed party, bytes32 ipfsHash);
-    event BidData            (address indexed party, uint indexed postID, uint indexed bidID, bytes32 ipfsHash);
-    event PostData           (address indexed party, uint indexed postID, bytes32 ipfsHash);
-    event BidDisputed        (address indexed party, uint indexed postID, uint indexed bidID, bytes32 ipfsHash);
-    
-    
     // Variables
     enum ObjectType {Painting, Carpet, Clay, Glass, Metal, Others}        // type of objects posted on market
     ERC20 public tokenAddress;    // HCT Token address
@@ -32,110 +14,108 @@ contract HCTMarketplace is OwnerShip {
     struct Poster {
         address seller;           // address of seller wallet
         ObjectType objectType;    // type of product
-        string ipfsHash;
         address escrowAgent;      // agent that decides token distribution
         address auditor;          // checks for spam and non related posts
+        address handiCraftExpert; // address of handiCraftExpert wallet
+        string handiCraftHash;    // hash of the prooved Original handiCraft
         bool isPostActive;        // auditor deactive the post if it break the terms of law
-        uint escrow;              // amount of token escrow 
+        bool readyToDeliver;      // status
+        bool isOutOfOrder;        // status
+        bool isCraftBroken;       // status
+        uint escrow;              // amount of token escrow
     }
     
     struct Bid {
         uint amount;              // amount in Eth or ERC20 buyer is bidding
-        uint commission;          // amount of commission for affiliate
+        uint guaranteeFee;        // amount of fee for guranteeAgent
+        uint expertFee;           // amount of fee taken by handiCraftExpert
         uint time;                // bid creation Timestamp
         ERC20 currency;           // currency of listing
-        address payable buyer;    // buyer wallet address
-        address affiliate;        // affiliate wallet address
+        address buyer;            // buyer wallet address
+        address guranteeAgent;    // guranteeAgent wallet address
         address arbitrator;       // arbitrator wallet address
         bool isActive;            // status
         bool isBuyerApproved;     // status
         bool isSellerApproved;    // status
         bool isDisputed;          // status
-        bool isFinilised;         // status
+        bool isFinalized;         // status
+        bool isInsurancePayed;    // status
     }
-    // Reputation Variables
-    struct SoldWithoutDispute{
-        address seller;      // address seller
-    }
-    // Reputation Variables
-    struct SellerWonDispute{
-        address seller;      // address seller
-    }
-    // Reputation Variables
-    struct BuyerWonDispute{
-        address seller;      // address seller
+    
+    struct InsuranceOffer {
+        uint amount;              // amount of tokens insurer is willing to pay
+        uint fee;                 // amount of tokens insurer takes as fee
+        uint time;                // insuranceOffer creation Timestamp
+        ERC20 currency;
+        address insurer;
+        address arbitrator;
+        bool isActive;            // status
+        bool isSellerApproved;    // status
+        bool isFinalized;         // status
     }
     
     Poster[] public posts;
-    mapping(address => SoldWithoutDispute[]) soldWithoutDispute;  // seller => soldWithoutDispute
-    mapping(address => SellerWonDispute[]) sellerWonDispute;  // seller => sellerWonDispute
-    mapping(address => BuyerWonDispute[]) buyerWonDispute;  // seller => buyerWonDispute
-    mapping(uint => Bid[])  bids; // PosterID => Bids
-    mapping(address => bool)  allowedAffiliates;
     
-    constructor() public payable{
-       
+    mapping(uint => Bid[])  bids; // PosterID => Bids
+    mapping(uint => InsuranceOffer[]) insuranceOffers; // PosterID => InsuranceOffers
+    
+    mapping(address => bool)  allowedGuranteeAgent;
+    mapping(address => bool)  allowedHandiCraftExpert;
+    mapping(address => bool)  allowedInsurer;
+    
+    constructor() public{
         owner = msg.sender;
-        // HCT Token contract, replace it if you deploy the token localy
-        tokenAddress = ERC20(0x4195fFcBc3d07E667175a044637cCC6CB4efB963);          
-        allowedAffiliates[address(0)] = true;        // allow null affiliate by default
+        tokenAddress = ERC20(0x349C255455d2e977ee4E26DEA888C119267f2E42);        // HCT Token contract
+        //allowedAffiliates[address(0)] = true;        // allow null affiliate by default
+        allowedGuranteeAgent[address(0)] = true;       // allow null guranteeAgent by default
+        allowedHandiCraftExpert[address(0)] = true;    // allow null handiCraftExpert by default
+        allowedInsurer[address(0)] = true;             // allow null insurer by default
     }
 
-    function createPost(string memory _ipfsHash, ObjectType _type, uint _escrow, address _auditor, address _escrowAgent)
-        public
-        payable
+    function createPost(
+    ObjectType _type,
+    uint _escrow,
+    string memory _handiCraftHash,
+    address _auditor,
+    address _escrowAgent,
+    address _handiCraftExpert)
+    public
+
     {
-        _createPost(msg.sender, _type, _ipfsHash, _escrow, _auditor, _escrowAgent);
-    }
-    
-    // private function for creating post
-    function _createPost(
-        address _seller,
-        ObjectType _type,
-        string memory _ipfsHash,        // IPFS hash witch details in price, availablity count and more details
-        uint _escrow,        // escrow in HCT token
-        address _auditor,
-        address _escrowAgent        // address of listing escrowAgent
-    )
-        private
-    {
-        
-        require(_escrowAgent != address(0), "Must specify depositManager");
-        posts.push(Poster({seller: _seller, objectType:_type, ipfsHash: _ipfsHash, escrow: _escrow, auditor: _auditor,
-        isPostActive: true, escrowAgent: _escrowAgent}));
+        require(_escrow > 0 ,"deposit some token");
+        require(_escrowAgent != address(0), "escrowAgent can not be null");
+        require(allowedHandiCraftExpert[address(this)] || allowedHandiCraftExpert[_handiCraftExpert],
+        "handiCraftExpert not allowed, Please register");
+        posts.push(Poster({
+        seller: msg.sender,
+        objectType:_type,
+        escrowAgent: _escrowAgent,
+        auditor: _auditor,
+        handiCraftExpert: _handiCraftExpert ,
+        handiCraftHash: _handiCraftHash,
+        isPostActive: true,
+        readyToDeliver: false,
+        isOutOfOrder: false,
+        isCraftBroken: false,
+        escrow: _escrow
+        }));
     
         if (_escrow > 0) {
-             //   tokenAddress.allowance(_seller,address(this));
-             //  tokenAddress.transferFrom(_seller, address(this), _escrow);        // Transfer HCT Token 
+            tokenAddress.transferFrom(msg.sender, address(this), _escrow);        // Transfer HCT Token
         }
-        emit PosterCreated(_seller, posts.length - 1, _ipfsHash);
     }
-    function getPost(uint index) public view returns(address, ObjectType, string memory ,address ,address, bool, uint){
-        return (posts[index].seller, posts[index].objectType, posts[index].ipfsHash, posts[index].escrowAgent,
-        posts[index].auditor, posts[index].isPostActive, posts[index].escrow);
-    }
-    
-    function updatePost(uint _postID, bytes32 _ipfsHash, uint _additionalEscrow) public {
-        _updatePost(msg.sender, _postID, _ipfsHash, _additionalEscrow);
-    }
-    
-    // private function for updating post
-    function _updatePost(
-        address _seller,
-        uint _postID,
-        bytes32 _ipfsHash,        // updated IPFS hash
-        uint _additionalEscrow         // additional escrow
-    ) private {
+
+    function updatePost(uint _postID, uint _additionalEscrow) public {
         Poster storage post = posts[_postID];
-        require(post.seller == _seller, "you need to be a seller for updating the post");
+        require(post.seller == msg.sender, "you need to be a seller for updating the post");
         
         if (_additionalEscrow > 0) {
             post.escrow += _additionalEscrow;
-            require(tokenAddress.transferFrom(_seller, address(this), _additionalEscrow),"you dont have enough currency to update your listing");
+            post.isOutOfOrder = false;
+            require(tokenAddress.transferFrom(msg.sender, address(this), _additionalEscrow),"you dont have enough currency to update your listing");
         }
-        emit PostUpdated(post.seller, _postID, _ipfsHash);
     }
-    
+ 
     // Return the total number of posts
     function totalPosts() public view returns (uint) {
         return posts.length;
@@ -145,134 +125,199 @@ contract HCTMarketplace is OwnerShip {
     function totalBids(uint postID) public view returns (uint) {
         return bids[postID].length;
     }
-    
-    // Return the number of successful sellings w/o dispute for spesific seller
-    // It is used to measure seller's reputation
-    function getSuccessfulSoldsWithoutDispute(address seller) public view returns (uint) {
-        return soldWithoutDispute[seller].length;
-    }
-    // Return the number of disputes that seller won...
-    function getSellerWonDispute(address seller) public view returns(uint){
-        return sellerWonDispute[seller].length;
-    }
-    // Return the number of disputes that seller lost and buyer won...
-    // This number would be a negative point for seller 
-    function getSellerLostDispute(address seller) public view returns(uint){
-        return buyerWonDispute[seller].length;
-    }
-    
-    // Poster escrowAgent withdraws post. IPFS hash contains reason for withdrawl.
-    function auditPost(uint postID, bytes32 _ipfsHash) public {
+
+    function auditPost(uint postID) public {
         Poster storage post = posts[postID];
         require(msg.sender == post.auditor, "Must be a auditor");
         
         post.isPostActive = false; 
-        
-        emit PostDisabled(post.auditor, postID, _ipfsHash);
     }
     
-    // Poster escrowAgent withdraws post. IPFS hash contains reason for withdrawl.
-    function withdrawPostEscrow(uint postID, address _target, bytes32 _ipfsHash) public {
+    // Poster escrowAgent withdraws post.
+    function withdrawPostEscrow(uint postID, address _target) public {
         Poster storage post = posts[postID];
         require(msg.sender == post.escrowAgent, "Must be a escrowAgent");
         require(_target != address(0), "No target");
         uint escrow = post.escrow;
         post.escrow = 0; // Prevent multiple deposit withdrawals
         tokenAddress.transfer(_target, escrow);                      // Send escrow to target
-        emit PostWithdrawn(_target, postID, _ipfsHash);
     }
     
     function createBid(
         uint postID,
-        bytes32 _ipfsHash,   // IPFS hash containing bid data
-        address _affiliate,  // Address to send any required commission to
-        uint256 _commission, // Amount of commission to send in HCT Token to affiliate if offer finalizes
-        uint _value,         // bid amount in ERC20 
-        ERC20 _currency,     // ERC20 token address 
-        address _arbitrator  // Escrow arbitrator
+        address _guranteeAgent,  // Address to send any required commission to
+        uint _guaranteeFee,      // Amount of fee to send in HCT Token to guranteeAgent if offer finalizes
+        uint _expertFee,         // Amount of fee to send in HCT Token to handiCraftExpert if offer finalizes
+        uint _value,             // bid amount in ERC20 
+        ERC20 _currency,         // ERC20 token address 
+        address _arbitrator      // arbitrator
     )
         public
-        payable
     {
-        bool affiliateWhitelistDisabled = allowedAffiliates[address(this)];
-        require(affiliateWhitelistDisabled || allowedAffiliates[_affiliate], "Affiliate not allowed");
-            
-        if (_affiliate == address(0)) {
-            // avoid commission tokens being trapped in marketplace contract.
-            require(_commission == 0, "no affiliate, no commission");
-        }
+        
+        require(allowedGuranteeAgent[address(this)] || allowedGuranteeAgent[_guranteeAgent],
+        "guranteeAgent not allowed, Please register");
+      
         Poster storage post = posts[postID];
         require(msg.sender != post.seller,"You can't bid on your own post");
+        require(post.isOutOfOrder == false, "This post is sold out");
         require(post.isPostActive == true, "this post is no longer active due to voilation of service");
 
         bids[postID].push(
             Bid
             ({amount: _value,
-            commission: _commission,
+            guaranteeFee: _guaranteeFee,
+            expertFee: _expertFee,
             time: now,
             currency: _currency,
             buyer: msg.sender,
-            affiliate: _affiliate,
+            guranteeAgent: _guranteeAgent,
             arbitrator: _arbitrator,
             isActive: true,
             isBuyerApproved: false,
             isSellerApproved: false,
             isDisputed:false,
-            isFinilised:false    
+            isFinalized:false,
+            isInsurancePayed: false
             }));
-     
-        if (address(_currency) == address(0)) {                                     // offer is in ETH
-            require(msg.value == _value, "ETH value doesn't match offer");
-        } else {                                                                    // listing is in ERC20
-            require(msg.value == 0, "ETH would be lost");
-            require(_currency.transferFrom(msg.sender, address(this), _value), "failed");
-        }
-        emit BidCreated(msg.sender, postID, bids[postID].length-1, _ipfsHash);
+
+            _currency.transferFrom(msg.sender, address(this), _value + _guaranteeFee + _expertFee);
     }
     
-    function buyerOrSellerRevokeBid(uint postID, uint bidID, bytes32 _ipfsHash) public {
+    function makeInsuranceOffer(
+        uint postID,
+        uint _insuranceAmount,         // bid amount in ERC20 
+        uint _fee,                     // insurer fee
+        ERC20 _currency,               // ERC20 token address 
+        address _arbitrator            // insurance arbitrator
+    )
+        public
+    {
+        
+        require(allowedInsurer[address(this)] || allowedInsurer[msg.sender], "You are not an Insurer, Please contact developers");
+            
         Poster storage post = posts[postID];
-        Bid memory bid = bids[postID][bidID];
-        require(msg.sender == bid.buyer || msg.sender == post.seller,"you need to be buyer or seller");
-        require(bid.isActive == true, "the bid is no longer available");
-        _refundBuyer(bid.buyer, bid.currency, bid.amount);
-        delete bids[postID][bidID];
-        emit BidRevoked(msg.sender, postID, bidID, _ipfsHash);
+        require(msg.sender != post.seller,"You can't make insurance offer on your own post");
+        require(post.isPostActive == true, "this post is no longer active due to voilation of service");
+        require(post.isOutOfOrder == false, "This post is sold out");
+        require(post.readyToDeliver == true, "This listing is not ready to be send to buyer yet");
+        
+        insuranceOffers[postID].push(InsuranceOffer({
+        amount: _insuranceAmount,              
+        fee: _fee,          
+        time: now,                
+        currency: _currency,
+        insurer: msg.sender,
+        arbitrator: _arbitrator,
+        isActive: true,
+        isSellerApproved: false,  
+        isFinalized: false       
+        }));
+        
+        _currency.transferFrom(msg.sender, address(this), _insuranceAmount);
+       
     }
     
+    function acceptInsuranceOffer(uint postID, uint insuranceID) public {
+        Poster storage post = posts[postID];
+        InsuranceOffer storage insurance = insuranceOffers[postID][insuranceID];
+        require(post.isOutOfOrder == false, "This post is sold out");
+        require(msg.sender == post.seller, "You need to be a seller");
+        require(insurance.isSellerApproved == false, "you have accepted this offer once");
+        require(insurance.isFinalized == false, "this insurance offer is already finalized");
+        require(insurance.isActive == true, "this insurance offer is no longer available");
+        require(insurance.time + 1000000000 > now , "The offer has expired"); // Relative accept deadLine
+        
+        insurance.isSellerApproved = true;
+        require(insurance.currency.transferFrom(msg.sender, address(this), insurance.fee), "token transfer failed");
+    }
     
-     function finaliseBid(uint postID, uint bidID, bytes32 _ipfsHash) public {
+    function payInsurerFee(uint postID, uint insuranceID, uint bidID) public{
+        
+        Bid storage bid = bids[postID][bidID];
+        InsuranceOffer storage insurance = insuranceOffers[postID][insuranceID];
+        require(msg.sender == insurance.insurer, "You need to be insurer");
+        require(insurance.isSellerApproved == true, "seller is not accepted your offer yet");
+        require(bid.isFinalized == true, "the craft is not delivered yet");
+        require(bid.isInsurancePayed == false, "no insurance for this bid or the bid insurance is already payed");
+        require(insurance.isFinalized == false ,"this offer is already finilized");
+
+        insurance.currency.transfer(insurance.insurer, insurance.fee + insurance.amount);
+        insurance.isFinalized = true;
+        bid.isInsurancePayed = true;        // prevents multiple insurance pay for a bid
+        
+    }
+    
+    function paySellerInsurance(uint postID, uint insuranceID, uint bidID) public{
         Poster storage post = posts[postID];
         Bid storage bid = bids[postID][bidID];
-        require(msg.sender == bid.buyer || msg.sender == post.seller, "You need to be a buyer or seller ");
+        InsuranceOffer storage insurance = insuranceOffers[postID][insuranceID];
+        require(msg.sender == post.seller, "You need to be seller");
+        require(post.isCraftBroken == true, "the craft is not broken, you can not take the insurance money");
+        require(bid.isFinalized == true, "the craft is not delivered yet");
+        require(bid.isInsurancePayed == false, "no insurance for this bid or the bid insurance is already payed");
+        require(insurance.isFinalized == false ,"this offer is already finilized");
+
+        insurance.currency.transfer(post.seller, insurance.fee + insurance.amount + post.escrow);
+        insurance.isFinalized = true;
+        bid.isInsurancePayed = true;        // prevents multiple insurance pay for a bid
+    }
+    
+    function withdrawInsuranceOffer(uint postID, uint insuranceID) public{
+        Poster storage post = posts[postID];
+        InsuranceOffer storage insurance = insuranceOffers[postID][insuranceID];
+        require(msg.sender == insurance.insurer || msg.sender == post.seller, "You need to be a seller or insurer");
+        require(insurance.isActive == true, "this insurance offer is no longer available");
+        insurance.currency.transfer(insurance.insurer, insurance.amount);
+        delete insuranceOffers[postID][insuranceID];
+    }
+    
+    function buyerOrSellerRevokeBid(uint postID, uint bidID) public {
+        Poster storage post = posts[postID];
+        Bid storage bid = bids[postID][bidID];
+        require(msg.sender == bid.buyer || msg.sender == post.seller,"you need to be buyer or seller");
+        require(bid.isActive == true, "the bid is no longer available");
+        bid.currency.transfer(bid.buyer, bid.amount);
+        delete bids[postID][bidID];
+    }
+    
+    function finalizeBid(uint postID, uint bidID) public {
+        Poster storage post = posts[postID];
+        Bid storage bid = bids[postID][bidID];
+        require(msg.sender == bid.buyer || msg.sender == post.seller, "You need to be a buyer or seller");
+        require(post.isOutOfOrder == false, "the post is out of order please update it again");
+        require(bid.isDisputed == false," this post is already disputed, wait for vote");
         require(post.isPostActive == true, "this post had violated our policy");
-        require(bid.isFinilised == false, "this bid is Already finalized");
+        require(bid.isFinalized == false, "this bid is Already finalized");
         require(bid.isActive == true, "this bid is no longer available");
         
-        require(post.escrow >= bid.commission, "amount of escrow must be than higher commission");
         require (bid.time + 1000000000 > now , "The bid has expired");                           // Relative accept deadLine
         if (msg.sender == bid.buyer) {
+            require(bid.isBuyerApproved == false, "You have already approved");
             bid.isBuyerApproved = true;
         } else if (msg.sender == post.seller) {
+            require(bid.isSellerApproved == false, "You have already approved");
             bid.isSellerApproved = true;
+            post.readyToDeliver = true;
         }
         if (bid.isBuyerApproved == true && bid.isSellerApproved == true) {
             soldWithoutDispute[post.seller].push(SoldWithoutDispute({seller: post.seller}));
-            bid.isFinilised = true;
-            uint new_escrow = post.escrow - bid.commission; // Accepting an offer puts hct Token into escrow
-            _payCommission(bid.affiliate, bid.commission);
-            uint seller_fund = new_escrow + bid.amount;
-            _paySeller(post.seller, seller_fund, bid.currency);
-            delete bids[postID][bidID];
+            bid.isFinalized = true;
+            post.isOutOfOrder = true;
+            bid.isActive = false;
+            post.readyToDeliver = false;                        // insurer can not make offer on this post any anymore
+            
+            bid.currency.transfer(post.handiCraftExpert, bid.expertFee);        // pay handiCraftExpert
+            bid.currency.transfer(bid.guranteeAgent, bid.guaranteeFee);         // pay guaranteeFee
+            bid.currency.transfer(post.seller, post.escrow + bid.amount);       // pay seller
         } 
-        emit BidFinalized(msg.sender, postID, bidID, _ipfsHash);
     }
-    
+
     // Buyer or seller can dispute transaction before finalized window
-    function dispute(uint postID, uint bidID, bytes32 _ipfsHash) public {
+    function dispute(uint postID, uint bidID) public {
         Poster storage post = posts[postID];
         Bid storage bid = bids[postID][bidID];
-        require( msg.sender == bid.buyer || msg.sender == post.seller, "Must be seller or buyer");
+        require(msg.sender == bid.buyer || msg.sender == post.seller, "Must be seller or buyer");
         if (msg.sender == bid.buyer && bid.isBuyerApproved == true){
             revert(); 
             // after buyer approves the finalized bid , they cant call dispute anymore... for sake of seller reputation
@@ -281,102 +326,52 @@ contract HCTMarketplace is OwnerShip {
         bid.isSellerApproved == true && bid.isBuyerApproved == false ||
         bid.isSellerApproved == false && bid.isBuyerApproved == true , 
         "can't call dispute now because The bid is not accepted yet...Use the remove bid function");
-        require(post.isPostActive== true, "this post had violated our policy");
-        require(bid.isFinilised == false, "this bid is Already finalized");
+        require(post.isPostActive == true, "this post had violated our policy");
+        require(bid.isFinalized == false, "this bid is Already finalized");
         require(bid.isActive == true, "this bid is no longer available");
         bid.isDisputed = true;                                              // Set status to "Disputed"
-        emit BidDisputed(msg.sender, postID, bidID, _ipfsHash);
     }
     
     // arbitrator calls this
     function executeRuling(
         uint postID,
         uint bidID,
-        bytes32 _ipfsHash,
-        uint _rule // 0: Seller, 1: Buyer, 2: Com + Seller, 3: Com + Buyer
-    ) public {
+        uint _rule // 1: Seller, 2: Buyer, 4:buyer won but no point for seller (broken craft)
+    ) public 
+    {   
         Poster storage post = posts[postID];
-        Bid memory bid = bids[postID][bidID];
+        Bid storage bid = bids[postID][bidID];
         require(bid.isDisputed == true, "status != disputed");
         require(msg.sender == bid.arbitrator, "Must be arbitrator to call vote");
+        require(post.isOutOfOrder == false, "the post is out of order please update it again");
 
-        uint seller_value = post.escrow + bid.amount;               // the escrow and bid amount
-    
-        if (_rule == 0){
-            _paySeller(post.seller, seller_value, bid.currency);
+        if (_rule == 1){
+            bid.currency.transfer(post.seller, post.escrow + bid.amount);
+            bid.currency.transfer(post.handiCraftExpert, bid.expertFee);
+            bid.currency.transfer(bid.guranteeAgent, bid.guaranteeFee);
             sellerWonDispute[post.seller].push(SellerWonDispute({seller: post.seller}));
-        } else if (_rule == 1){
-            _refundBuyer(bid.buyer, bid.currency, bid.amount);
-            buyerWonDispute[post.seller].push(BuyerWonDispute({seller: post.seller}));
         } else if (_rule == 2){
-            require(post.escrow >= bid.commission, "amount of escrow must be than higher commission");
-            _payCommission(bid.affiliate, bid.commission);
-            uint refund_seller = seller_value - bid.commission;
-            _paySeller(post.seller, refund_seller, bid.currency);
-            sellerWonDispute[post.seller].push(SellerWonDispute({seller: post.seller}));
-        } else if (_rule == 3){
-            require(post.escrow >= bid.commission, "amount of escrow must be than higher commission");
-            _payCommission(bid.affiliate, bid.commission);
-            _refundBuyer(bid.buyer, bid.currency, bid.amount);
+            bid.currency.transfer(bid.buyer, bid.amount + post.escrow + bid.guaranteeFee + bid.expertFee);
             buyerWonDispute[post.seller].push(BuyerWonDispute({seller: post.seller}));
+        } else if (_rule == 3){
+            bid.currency.transfer(bid.buyer, bid.amount + bid.guaranteeFee + bid.expertFee);
+            post.isCraftBroken = true;
         }
-        bid.isFinilised = true;
+        
+        bid.isFinalized = true;
         bid.isActive = false;
-        delete bids[postID][bidID];
-        emit RuleExecuted(msg.sender, postID, bidID, _ipfsHash);
-    }
-    
-    // adds Associate ipfs data with the marketplace
-    function addMarketData(bytes32 ipfsHash) public {
-        emit MarketplaceData(msg.sender, ipfsHash);
+        post.isOutOfOrder = true;
+        post.readyToDeliver = false;
+       
     }
 
-    // adds Associate ipfs data with a post
-    function addPostData(uint postID, bytes32 ipfsHash) public {
-        emit PostData(msg.sender, postID, ipfsHash);
+    function addGuaranteeAgent(address _guaranteeAgent) public onlyOwner {
+        allowedGuranteeAgent[_guaranteeAgent] = true;
     }
-
-    // adds Associate ipfs data with an bid
-    function addBidData(uint postID, uint bidID, bytes32 ipfsHash) public {
-        emit BidData(msg.sender, postID, bidID, ipfsHash);
+    function addHandiCraftExpert(address _handiCraftExpert) public onlyOwner {
+        allowedHandiCraftExpert[_handiCraftExpert] = true;
     }
-    
-    // owner Adds affiliate to whitelist. Set to address(this) to disable.
-    function addAffiliate(address _affiliate, bytes32 ipfsHash) public onlyOwner {
-        allowedAffiliates[_affiliate] = true;
-        emit AffiliateAdded(_affiliate, ipfsHash);
+    function addInsurer(address _insurer) public onlyOwner {
+        allowedInsurer[_insurer] = true;
     }
-
-    // owner Removes affiliate from whitelist.
-    function removeAffiliate(address _affiliate, bytes32 ipfsHash) public onlyOwner {
-        delete allowedAffiliates[_affiliate];
-        emit AffiliateRemoved(_affiliate, ipfsHash);
-    }
-    
-    // Pays
-    
-    // Pay commission to affiliate
-    function _payCommission(address affiliate, uint commission) private {
-        if (affiliate != address(0)) {
-            tokenAddress.transfer(affiliate, commission);
-        }
-    }
-    
-    // Pay seller in ETH or ERC20
-    function _paySeller(address seller, uint value, ERC20 currency) private {
-        if(seller != address(0)){
-           currency.transfer(seller, value);
-        }
-    }
-    
-    // Refunds buyer - used by 1) executeRuling() and 2) to allow a seller to refund a purchase
-    function _refundBuyer(address payable buyer, ERC20 currency, uint value) private  {
-        if (address(currency) == address(0)) {
-            buyer.transfer(value);                          // ether transfer
-        } else {
-                currency.transfer(buyer, value);
-        }
-    }
-    
-    
 }
