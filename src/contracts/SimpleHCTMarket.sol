@@ -176,5 +176,4 @@ contract SimpleHCTMarket is Reputation, OwnerShip {
     function addAffiliate(address _affiliate) public onlyOwner {
         allowedAffiliates[_affiliate] = true;
     } 
-    
 }
