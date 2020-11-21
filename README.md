@@ -1,4 +1,4 @@
-# HCT_marketplace
+# HC_marketplace
 A decentralised marketplace based on Blockchain technology for HandiCrafts.
 
 to interact with this DApp you will need to install Node.js, Truffle framework and Ganache
