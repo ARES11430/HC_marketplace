@@ -5,7 +5,7 @@ import "./ERC20.sol";
 import "./Reputation.sol";
 
 
-contract HCTMarketplace is Reputation, OwnerShip {
+contract HCMarketplace is Reputation, OwnerShip {
   
     // Variables
     enum ObjectType {Painting, Carpet, Clay, Glass, Metal, Others}        // type of objects posted on market
