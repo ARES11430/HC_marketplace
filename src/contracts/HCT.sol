@@ -2,7 +2,7 @@ pragma solidity >= 0.5.0;
 
 import "./ERC20.sol";
 
-contract HCTToken is ERC20 {
+contract HCT is ERC20 {
    
     mapping (address => uint256) private _balances;
     mapping (address => mapping (address => uint256)) private _allowances;
