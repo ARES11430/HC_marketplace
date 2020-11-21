@@ -4,7 +4,7 @@ import "./OwnerShip.sol";
 import "./ERC20.sol";
 import "./Reputation.sol";
 
-contract SimpleHCTMarket is Reputation, OwnerShip {
+contract SimpleHCMarket is Reputation, OwnerShip {
     
 
     enum ObjectType {Jewelry, Clothing, HomeFurniture, Toy, OtherCrafts}        // type of objects posted on market
