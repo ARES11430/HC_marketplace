@@ -4,7 +4,6 @@ import "./OwnerShip.sol";
 import "./ERC20.sol";
 import "./Reputation.sol";
 
-
 contract HCMarketplace is Reputation, OwnerShip {
   
     // Variables
@@ -258,7 +257,8 @@ contract HCMarketplace is Reputation, OwnerShip {
         require(bid.isInsurancePayed == false, "no insurance for this bid or the bid insurance is already payed");
         require(insurance.isFinalized == false ,"this offer is already finilized");
 
-        insurance.currency.transfer(post.seller, insurance.fee + insurance.amount + post.escrow);
+        insurance.currency.transfer(post.seller, insurance.amount + post.escrow);
+        insurance.currency.transfer(insurance.insurer, insurance.fee);
         insurance.isFinalized = true;
         bid.isInsurancePayed = true;        // prevents multiple insurance pay for a bid
     }
@@ -336,7 +336,7 @@ contract HCMarketplace is Reputation, OwnerShip {
     function executeRuling(
         uint postID,
         uint bidID,
-        uint _rule // 1: Seller, 2: Buyer, 4:buyer won but no point for seller (broken craft)
+        uint _rule // 1: Seller, 2: Buyer, 3:buyer won but no point for seller (broken craft)
     ) public 
     {   
         Poster storage post = posts[postID];
@@ -354,7 +354,8 @@ contract HCMarketplace is Reputation, OwnerShip {
             bid.currency.transfer(bid.buyer, bid.amount + post.escrow + bid.guaranteeFee + bid.expertFee);
             buyerWonDispute[post.seller].push(BuyerWonDispute({seller: post.seller}));
         } else if (_rule == 3){
-            bid.currency.transfer(bid.buyer, bid.amount + bid.guaranteeFee + bid.expertFee);
+            bid.currency.transfer(bid.buyer, bid.amount + bid.guaranteeFee);
+            bid.currency.transfer(post.handiCraftExpert, bid.expertFee);
             post.isCraftBroken = true;
         }
         
