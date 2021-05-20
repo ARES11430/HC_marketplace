@@ -1,10 +1,10 @@
 pragma solidity >= 0.4.0 < 0.6.4;
 
-import "./OwnerShip.sol";
-import "./ERC20.sol";
-import "./Reputation.sol";
+import "hct/ownerShip/OwnerShip.sol";
+import "hct/token/ERC20.sol";
+import "hct/marketplace/Reputation.sol";
 
-contract SimpleHCMarket is Reputation, OwnerShip {
+contract SimpleHCTMarket is Reputation, OwnerShip {
     
 
     enum ObjectType {Jewelry, Clothing, HomeFurniture, Toy, OtherCrafts}        // type of objects posted on market
@@ -26,7 +26,6 @@ contract SimpleHCMarket is Reputation, OwnerShip {
         address arbitrator;       // address of arbitrator
         uint commission;          // affiliate commission
         bool isBuyerApproved;     // status
-        bool isSellerApproved;    // status
         bool isDisputed;          // status
     }
     
@@ -88,7 +87,6 @@ contract SimpleHCMarket is Reputation, OwnerShip {
           commission: _commission,
           arbitrator: _arbitrator,
           isBuyerApproved: false,
-          isSellerApproved: false,
           isDisputed: false
         }));
 
@@ -109,16 +107,14 @@ contract SimpleHCMarket is Reputation, OwnerShip {
         Order storage order = orders[postID][orderID];
         require(post.isPostActive == true, "this post had violated our policy");
         require(order.isDisputed == false, "already disputed, wait for vote");
-        require(msg.sender == order.buyer || msg.sender == post.seller, "You need to be a buyer or seller");
+        require(msg.sender == order.buyer, "You need to be a buyer");
         
-         if (msg.sender == post.seller) {
-            require(order.isSellerApproved == false, "You have already approved");
-            order.isSellerApproved = true;
-        } else if (msg.sender == order.buyer) {
+        
+        if (msg.sender == order.buyer) {
             require(order.isBuyerApproved == false, "You have already approved");
             order.isBuyerApproved = true;
         }
-        if (order.isBuyerApproved == true && order.isSellerApproved == true) {
+        if (order.isBuyerApproved == true) {
             soldWithoutDispute[post.seller].push(SoldWithoutDispute({seller: post.seller}));  // Reputation
             
             order.currency.transfer(post.seller, post.price - order.commission);     // pay seller
@@ -138,9 +134,8 @@ contract SimpleHCMarket is Reputation, OwnerShip {
             // after buyer approves the finalized bid , they cant call dispute anymore... for sake of seller reputation
         }
         require(
-        order.isSellerApproved == true && order.isBuyerApproved == false ||
-        order.isSellerApproved == false && order.isBuyerApproved == true , 
-        "can't call dispute now because The purchase is not accepted by seller yet");
+        order.isBuyerApproved == false, "Already finalized");
+        
         require(post.isPostActive == true, "this post had violated our policy");
         order.isDisputed = true;                                                  // Set status to "Disputed"
     }
@@ -159,7 +154,7 @@ contract SimpleHCMarket is Reputation, OwnerShip {
         
         if (_rule == 1){
             order.currency.transfer(post.seller, post.price - order.commission + 10);     // pay seller
-            order.currency.transfer(order.affiliate, order.commission);              // pay affiliate
+            order.currency.transfer(order.affiliate, order.commission);              // pay handiCraftExpert
             sellerWonDispute[post.seller].push(SellerWonDispute({seller: post.seller}));
         } else if (_rule == 2){
             order.currency.transfer(order.buyer, post.price + 10);  // pay back all tokens
@@ -167,7 +162,6 @@ contract SimpleHCMarket is Reputation, OwnerShip {
         }
         
         // 2 lines: they can not call finalized function anymore
-        order.isSellerApproved = true; 
         order.isBuyerApproved = true;
 
     }
@@ -176,4 +170,5 @@ contract SimpleHCMarket is Reputation, OwnerShip {
     function addAffiliate(address _affiliate) public onlyOwner {
         allowedAffiliates[_affiliate] = true;
     } 
+    
 }
