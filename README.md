@@ -18,6 +18,7 @@ SimpleHC creation transaction: https://rinkeby.etherscan.io/tx/0x91f3f4af1e5a93d
 SimpleHC contract transactions: https://rinkeby.etherscan.io/address/0xbdf918da6d1f37009144f87a7e8a6b7e69886988
 
 HCMarketplace creation transaction: https://rinkeby.etherscan.io/tx/0x5faa59e6762814d2a7e300226f16a0f542ca3ae975660287454ecfa77dfafeb6
+
 HCMarketplace contract transactions: https://rinkeby.etherscan.io/address/0x47a9e81501df2aaabb39e65f4a61f99e486666cb
 
 
