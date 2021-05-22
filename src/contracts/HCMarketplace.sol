@@ -1,8 +1,8 @@
-pragma solidity >= 0.5.0;
+pragma solidity >= 0.4.0 < 0.6.4;
 
-import "./OwnerShip.sol";
-import "./ERC20.sol";
-import "./Reputation.sol";
+import "hct/ownerShip/OwnerShip.sol";
+import "hct/token/ERC20.sol";
+import "hct/marketplace/Reputation.sol";
 
 contract HCMarketplace is Reputation, OwnerShip {
   
@@ -64,7 +64,7 @@ contract HCMarketplace is Reputation, OwnerShip {
     
     constructor() public{
         owner = msg.sender;
-        tokenAddress = ERC20(0x349C255455d2e977ee4E26DEA888C119267f2E42);        // HCT Token contract
+        tokenAddress = ERC20(0x0b2e12A7de3599471F48463171DFcbAC84C4Bd70);        // HCT Token contract
         //allowedAffiliates[address(0)] = true;        // allow null affiliate by default
         allowedGuranteeAgent[address(0)] = true;       // allow null guranteeAgent by default
         allowedHandiCraftExpert[address(0)] = true;    // allow null handiCraftExpert by default
@@ -302,6 +302,7 @@ contract HCMarketplace is Reputation, OwnerShip {
         }
         if (bid.isBuyerApproved == true && bid.isSellerApproved == true) {
             soldWithoutDispute[post.seller].push(SoldWithoutDispute({seller: post.seller}));
+            buyerHonestPoints[bid.buyer].push(HonestBuyer({buyer: bid.buyer}));
             bid.isFinalized = true;
             post.isOutOfOrder = true;
             bid.isActive = false;
@@ -350,9 +351,11 @@ contract HCMarketplace is Reputation, OwnerShip {
             bid.currency.transfer(post.handiCraftExpert, bid.expertFee);
             bid.currency.transfer(bid.guranteeAgent, bid.guaranteeFee);
             sellerWonDispute[post.seller].push(SellerWonDispute({seller: post.seller}));
+            buyerNotHonestPoints[bid.buyer].push(NotHonestBuyer({buyer: bid.buyer}));
         } else if (_rule == 2){
             bid.currency.transfer(bid.buyer, bid.amount + post.escrow + bid.guaranteeFee + bid.expertFee);
             buyerWonDispute[post.seller].push(BuyerWonDispute({seller: post.seller}));
+            buyerHonestPoints[bid.buyer].push(HonestBuyer({buyer: bid.buyer}));
         } else if (_rule == 3){
             bid.currency.transfer(bid.buyer, bid.amount + bid.guaranteeFee);
             bid.currency.transfer(post.handiCraftExpert, bid.expertFee);
