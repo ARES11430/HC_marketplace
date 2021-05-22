@@ -35,7 +35,7 @@ contract SimpleHCTMarket is Reputation, OwnerShip {
     
     constructor() public{
         owner = msg.sender;
-        tokenAddress = ERC20(0x349C255455d2e977ee4E26DEA888C119267f2E42);        // HCT Token contract
+        tokenAddress = ERC20(0x0b2e12A7de3599471F48463171DFcbAC84C4Bd70);        // HCT Token contract
         allowedAffiliates[address(0)] = true;        // allow null affiliate by default
     } 
     
@@ -118,7 +118,7 @@ contract SimpleHCTMarket is Reputation, OwnerShip {
             soldWithoutDispute[post.seller].push(SoldWithoutDispute({seller: post.seller}));  // Reputation
             
             order.currency.transfer(post.seller, post.price - order.commission);     // pay seller
-            order.currency.transfer(order.affiliate, order.commission);              // pay affiliate
+            order.currency.transfer(order.affiliate, order.commission);              // pay handiCraftExpert
             order.currency.transfer(order.buyer, 10);                                // pay back extra tokens         
         } 
     }
